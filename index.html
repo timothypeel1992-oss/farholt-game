@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Farholt — Kolonie</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --pine-deep:#132a20; --pine:#1c3a2b; --canopy:#2f5233; --moss:#4c7a3d; --moss-light:#8fc93a;
+    --amber:#e8a94d; --amber-deep:#c9822c; --parchment:#efe6cd; --ember:#d9542d; --river:#3e8e8e; --ink:#20291f; --panel-line:#3f5b41;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--pine-deep);font-family:'Nunito',sans-serif;color:var(--parchment);overflow:hidden;height:100%;}
+  #app{position:relative;width:100%;max-width:1600px;height:100vh;max-height:100vh;margin:0 auto;display:flex;flex-direction:column;user-select:none;}
+  h1,.display{font-family:'Baloo 2',sans-serif;}
+
+  #hud{background:linear-gradient(180deg,var(--pine) 0%,var(--pine-deep) 100%);border-bottom:3px solid var(--panel-line);padding:8px 10px 6px;display:flex;flex-direction:column;gap:6px;}
+  #hudTop{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+  #title{font-size:15px;font-weight:800;letter-spacing:.5px;color:var(--amber);display:flex;align-items:center;gap:6px;}
+  #title .sub{font-family:'Nunito';font-weight:600;font-size:10px;color:#b9c9b3;letter-spacing:0;}
+  #invRow{display:flex;gap:8px;font-size:12px;font-weight:700;flex-wrap:wrap;}
+  #resourceOverlay .invItem{background:none;border:none;padding:1px 2px;font-size:12.5px;font-weight:800;}
+  .invItem.pulse{animation:pulseFlash .45s ease;}
+  @keyframes pulseFlash{0%{transform:scale(1);}30%{transform:scale(1.22);background:rgba(232,169,77,.55);}100%{transform:scale(1);}}
+  .bars{position:absolute;bottom:10px;left:10px;z-index:15;display:flex;flex-direction:column;gap:6px;padding:9px 10px;background:rgba(19,42,32,.78);border-radius:8px;border:2px solid var(--pine);box-shadow:0 3px 10px rgba(0,0,0,.5);width:160px;}
+  .barWrap{flex:1;min-width:110px;display:flex;flex-direction:column;gap:2px;}
+  .barLabel{display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:#cfe0c9;text-transform:uppercase;letter-spacing:.5px;}
+  .barTrack{height:9px;border-radius:5px;background:rgba(0,0,0,.35);overflow:hidden;border:1px solid rgba(0,0,0,.4);}
+  .barFill{height:100%;border-radius:5px;transition:width .3s ease;}
+  .fill-hp{background:linear-gradient(90deg,#a5342a,var(--ember));}
+  .fill-hunger{background:linear-gradient(90deg,#a8791f,var(--amber));}
+  .fill-thirst{background:linear-gradient(90deg,#1f5f5f,var(--river));}
+  .fill-energy{background:linear-gradient(90deg,#a3941f,#e8d84d);}
+
+  #stage{position:relative;background:#0e1f16;flex:1;min-height:0;overflow:hidden;}
+  /* Groesse und Position setzt fitCanvasToStage() in engine/renderer.js.
+     Vorher stand hier width:100%;height:100% — das zog die 800x480 grosse
+     Zeichenflaeche auf die volle Buehne (z.B. 1600x420) und verzerrte damit
+     jedes Sprite. */
+  #game{position:absolute;top:0;left:0;image-rendering:pixelated;cursor:pointer;background:#132a20;}
+  canvas{display:block;width:100%;height:auto;image-rendering:pixelated;cursor:pointer;background:#132a20;}
+  #hint{position:absolute;left:10px;bottom:150px;z-index:14;background:rgba(19,42,32,.85);border:1px solid var(--panel-line);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;color:var(--parchment);pointer-events:none;transition:opacity .2s;max-width:min(70%,340px);}
+  #raidBanner{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(122,26,20,.92);border:2px solid #ffb199;color:#fff;font-weight:800;font-size:12px;padding:6px 14px;border-radius:10px;display:none;z-index:15;text-align:center;}
+  /* Wetterband nach links: rechts oben sitzt die Minimap-Spalte mit
+   derselben Verankerung — das Band lag genau darauf. */
+  #weatherBanner{position:absolute;top:10px;left:10px;background:rgba(19,42,32,.85);border:1px solid var(--panel-line);color:var(--parchment);font-weight:700;font-size:11px;padding:5px 10px;border-radius:10px;display:none;z-index:15;}
+  #buildModeBanner{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(201,130,44,.95);border:2px solid var(--parchment);color:var(--ink);font-weight:800;font-size:12px;padding:6px 14px;border-radius:10px;display:none;z-index:16;text-align:center;}
+  #toastWrap{position:absolute;top:52px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:4px;align-items:center;pointer-events:none;z-index:20;}
+  .toast{background:rgba(19,42,32,.92);border:1px solid var(--amber);color:var(--parchment);font-weight:700;font-size:12px;padding:5px 12px;border-radius:20px;animation:fadeUp 2.2s ease forwards;}
+  @keyframes fadeUp{0%{opacity:0;transform:translateY(4px);}10%{opacity:1;transform:translateY(0);}80%{opacity:1;}100%{opacity:0;transform:translateY(-6px);}}
+
+  #commandBar{display:none;padding:8px 10px;background:#24331f;border-top:3px solid var(--panel-line);align-items:center;gap:6px;flex-wrap:wrap;}
+  #commandBar.show{display:flex;}
+  #commandBar .cbName{font-weight:800;font-size:12px;color:var(--amber);margin-right:4px;}
+  .roleBtn{width:34px;height:34px;padding:0;font-size:15px;}
+  .roleBtn.active{outline:2px solid var(--amber);}
+  #btnKeyToggle{font-size:10.5px;padding:6px 10px;}
+  #btnKeyToggle.on, #btnSoundToggle.on, #btnMusicToggle.on{background:var(--amber);color:var(--ink);}
+  #btnSoundToggle{font-size:10.5px;padding:6px 10px;}
+  .active-demolish{outline:2px solid var(--ember);}
+  .wmGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+  .wmCell{aspect-ratio:1;border-radius:10px;background:rgba(30,45,30,.5);border:2px solid #c9b988;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-end;overflow:hidden;position:relative;cursor:pointer;color:var(--ink);transition:transform .12s,box-shadow .12s,border-color .12s;}
+  .wmCell:not(.fog):hover{transform:translateY(-2px);box-shadow:0 5px 14px rgba(0,0,0,.45);border-color:var(--ember);}
+  .wmThumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .wmCap{position:relative;z-index:2;background:linear-gradient(180deg,rgba(19,42,32,0) 0%,rgba(19,42,32,.9) 55%);padding:10px 4px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;}
+  .wmName{font-weight:800;font-size:9.5px;color:var(--parchment);text-shadow:0 1px 2px rgba(0,0,0,.8);line-height:1.15;text-align:center;}
+  .wmDanger{font-size:8.5px;letter-spacing:-1px;}
+  .wmYou{position:absolute;top:3px;right:4px;z-index:3;font-size:13px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.9));}
+  .wmOutpost{position:absolute;top:3px;left:4px;z-index:3;font-size:9px;font-weight:800;
+    background:rgba(19,42,32,.85);border:1px solid rgba(232,169,77,.6);border-radius:5px;
+    padding:1px 5px;color:var(--amber);}
+  .wmUnknown{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#6e7a6a;}
+  .wmVoid{position:absolute;inset:0;background:repeating-linear-gradient(45deg,rgba(0,0,0,.16) 0 5px,rgba(0,0,0,.09) 5px 10px);}
+  .wmCell.current{border-color:var(--ember);box-shadow:0 0 0 2px rgba(217,84,45,.35);}
+  .wmCell.fog{background:rgba(0,0,0,.3);cursor:default;border-color:#5a6b52;}
+  .interiorCanvasWrap{border-radius:10px;overflow:hidden;margin-bottom:10px;border:2px solid var(--pine);}
+  #interiorCanvas{display:block;width:100%;height:auto;background:#2a1f16;}
+
+  #bottomBar{display:flex;gap:6px;padding:8px 10px;background:var(--pine-deep);border-top:3px solid var(--panel-line);align-items:center;flex-wrap:wrap;}
+  #minimapBox{position:absolute;top:10px;right:10px;z-index:15;display:flex;flex-direction:column;gap:4px;align-items:stretch;}
+  #minimapCanvas{display:block;background:rgba(26,46,26,.88);border-radius:8px;border:2px solid var(--pine);box-shadow:0 3px 10px rgba(0,0,0,.5);width:140px;height:88px;}
+  #btnWorldMapUnderMap{font-size:11px;padding:6px 8px;width:100%;}
+  #clockRow{display:flex;align-items:center;justify-content:center;gap:6px;margin:4px 0 2px;}
+  #clockText{font-size:12px;font-weight:800;color:var(--parchment);font-variant-numeric:tabular-nums;letter-spacing:.5px;}
+  .hkHintGroup{gap:8px;padding:0 9px;}
+  .hkHint{font-size:10px;font-weight:800;color:var(--parchment);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 7px;white-space:nowrap;}
+  .barGroup{display:flex;gap:6px;align-items:center;padding:0 9px;border-right:1px solid rgba(255,255,255,.15);}
+  .barGroup:last-child{border-right:none;}
+  button{font-family:'Nunito',sans-serif;font-weight:800;font-size:12px;color:var(--ink);background:var(--amber);border:none;border-radius:9px;padding:9px 11px;cursor:pointer;box-shadow:0 2px 0 var(--amber-deep);transition:transform .08s;}
+  button:active{transform:translateY(2px);box-shadow:0 0 0 var(--amber-deep);}
+  button.secondary{background:#3d5a3f;color:var(--parchment);box-shadow:0 2px 0 #24391f;}
+  button:disabled{background:#5a5a54;color:#948e83;box-shadow:0 2px 0 #3d3d38;cursor:default;}
+  #btnMenuFight{background:linear-gradient(180deg,#e0604a,#c94f3d);color:#fff5ec;box-shadow:0 2px 0 #8a2f22;}
+  #btnMenuFight:hover:not(:disabled){background:linear-gradient(180deg,#ee6f57,#d65c48);}
+  #btnMenuPartyRound{background:linear-gradient(180deg,#e0604a,#c94f3d);color:#fff5ec;box-shadow:0 2px 0 #8a2f22;}
+  #btnMenuItem{background:linear-gradient(180deg,#4ea87e,#3e8e6e);color:#fff5ec;box-shadow:0 2px 0 #245a45;}
+  #btnMenuItem:hover:not(:disabled){background:linear-gradient(180deg,#5cb98c,#48a07d);}
+  #btnMenuDefend{background:linear-gradient(180deg,#4a84bc,#3a6fa0);color:#fff5ec;box-shadow:0 2px 0 #234868;}
+  #btnMenuDefend:hover:not(:disabled){background:linear-gradient(180deg,#5892c9,#4880b0);}
+  #btnMenuFlee{background:linear-gradient(180deg,#c9a23d,#a08a3a);color:#2a2010;box-shadow:0 2px 0 #6b5c22;}
+  #btnMenuFlee:hover:not(:disabled){background:linear-gradient(180deg,#d9b24d,#b09a48);}
+  .itemBtnBerry{background:linear-gradient(180deg,#4ea87e,#3e8e6e)!important;color:#fff5ec!important;box-shadow:0 2px 0 #245a45!important;}
+  .itemBtnPotion{background:linear-gradient(180deg,#d65c6e,#c94358)!important;color:#fff5ec!important;box-shadow:0 2px 0 #7a2735!important;}
+  .itemBtnTrap{background:linear-gradient(180deg,#9a6fc9,#7a4fb0)!important;color:#fff5ec!important;box-shadow:0 2px 0 #4a2a6b!important;}
+  .itemBtnTrap:disabled{background:#5a5a54!important;color:#948e83!important;box-shadow:0 2px 0 #3d3d38!important;}
+
+  /* z-index 80 statt 30: der Titelbildschirm liegt auf 70. Einstellungen
+     und Credits öffneten sich dadurch dahinter — der Klick wirkte, war
+     aber unsichtbar, und das Titelbild schien nicht zu reagieren. */
+  .overlay{position:absolute;inset:0;background:rgba(10,20,14,.78);display:flex;align-items:center;justify-content:center;z-index:80;padding:10px;}
+  @keyframes battleFlash{0%{opacity:.95;}100%{opacity:0;}}
+  @keyframes battlePunch{0%{transform:scale(0.7) rotate(-2deg);opacity:0;}60%{transform:scale(1.04) rotate(0.5deg);opacity:1;}100%{transform:scale(1) rotate(0);opacity:1;}}
+  #battleFlash{position:fixed;inset:0;background:#fff;z-index:9998;pointer-events:none;opacity:0;}
+  #battleFlash.go{animation:battleFlash 0.35s ease-out forwards;}
+  .battlePanel.punchIn{animation:battlePunch 0.4s cubic-bezier(.2,.9,.3,1.3);}
+  .hidden{display:none !important;}
+  .panel{background:linear-gradient(180deg,var(--parchment),#e3d7b4);color:var(--ink);border-radius:16px;padding:14px 16px;width:100%;max-width:560px;max-height:88%;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,.5);border:4px solid var(--pine);}
+  .panel h2{font-family:'Baloo 2';margin:0 0 4px;font-size:19px;color:var(--pine-deep);}
+  .panel h3{font-family:'Baloo 2';margin:14px 0 6px;font-size:15px;color:var(--pine-deep);border-top:2px dashed #c9b988;padding-top:10px;}
+  .panel .desc{font-size:12px;color:#5a5138;margin-bottom:10px;}
+  .panelClose{float:right;}
+  .recipe{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.5);border:1px solid #c9b988;border-radius:10px;padding:9px;margin-bottom:8px;}
+  .recipe.locked{opacity:.55;}
+  .recipe .rname{font-weight:800;flex:1;font-size:13px;}
+  .recipe .rcost{font-size:10.5px;color:#5a5138;margin-bottom:5px;}
+  .recipeIcon{width:38px;height:38px;flex-shrink:0;background:rgba(232,169,77,.25);border:1px solid #c9822c;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+  .costPillRow{display:flex;flex-wrap:wrap;gap:4px;}
+  .costPill{font-size:10px;font-weight:800;background:rgba(76,122,61,.18);border:1px solid rgba(76,122,61,.4);border-radius:6px;padding:1px 5px;color:#3d5a2e;}
+  .costPill.costShort{background:rgba(217,84,45,.15);border-color:rgba(217,84,45,.4);color:#8a3a1f;}
+  .lockNote{font-size:10px;color:#a8651c;font-weight:800;margin-top:3px;}
+  .dexGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:7px;}
+  .dexCard{background:rgba(255,255,255,.55);border:2px solid #c9b988;border-radius:10px;padding:5px;text-align:center;cursor:pointer;transition:transform .1s;position:relative;}
+  .dexCard.rar-uncommon{border-color:#5aa8d8;box-shadow:0 0 8px rgba(120,205,255,.4);}
+  .dexCard.rar-rare{border-color:#f6c44a;box-shadow:0 0 11px rgba(246,196,74,.55);}
+  .rarBadge{position:absolute;top:3px;right:5px;font-size:10px;font-weight:800;letter-spacing:-1px;z-index:2;}
+  .rarBadge.rar-uncommon{color:#3f8fc4;}
+  .rarBadge.rar-rare{color:#d99b17;text-shadow:0 0 4px rgba(246,196,74,.7);}
+  .dexCard:hover{transform:translateY(-2px);}
+  .dexCard.active{border-color:var(--ember);box-shadow:0 0 0 2px var(--ember) inset;}
+  .dexCard canvas{width:100%;height:50px;}
+  .dexCard .dname{font-size:9.5px;font-weight:800;margin-top:2px;}
+  .dexCard .dtype{font-size:8.5px;color:#5a5138;}
+
+  .resGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin-bottom:8px;}
+  .resGridCompact{grid-template-columns:repeat(auto-fill,minmax(78px,1fr));}
+  .resCatHeader{font-size:11.5px;font-weight:800;color:#8a6f2c;text-transform:uppercase;letter-spacing:.03em;margin:10px 0 5px;padding-bottom:3px;border-bottom:1px solid rgba(138,111,44,.25);}
+  .resCatHeader:first-child{margin-top:0;}
+  .slotGrid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;}
+  /* Pausenbereich im Menüfenster */
+  .pauseState{display:flex;align-items:center;justify-content:center;gap:7px;
+    background:rgba(232,169,77,.14);border:1px solid rgba(232,169,77,.34);
+    border-radius:9px;padding:7px 10px;margin-bottom:9px;
+    font-size:12px;font-weight:800;color:var(--parchment);}
+  .pauseMain{display:grid;grid-template-columns:1fr;gap:6px;}
+  .pauseMain button{width:100%;font-size:13px;padding:9px 12px;}
+  @media (min-width:420px){ .pauseMain{grid-template-columns:1fr 1fr;}
+    .pauseMain button:first-child{grid-column:1 / -1;} }
+  /* Lagerkiste: Sortierleiste und Füllbalken */
+  .chestSortBar{display:flex;gap:5px;flex-wrap:wrap;margin:6px 0 9px;}
+  .chestSortBar button{font-size:11px;padding:5px 10px;}
+  .resItem{position:relative;}
+  .resBar{position:absolute;left:7px;right:7px;bottom:2px;height:3px;
+    background:rgba(0,0,0,.30);border-radius:2px;overflow:hidden;}
+  .resBarFill{height:100%;background:linear-gradient(90deg,#8fd08a,#e8a94d);
+    border-radius:2px;transition:width .3s;}
+  .resItem.resFast .resBarFill{background:linear-gradient(90deg,#e8a94d,#d9812d);}
+  .resItem.resVoll .resBarFill{background:#d9542d;}
+  .resItem.resVoll{border-color:#d9542d;}
+  .launcherGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .launcherGrid button{padding:14px 10px;font-size:13px;}
+  .slotItem{aspect-ratio:1;background:rgba(0,0,0,.15);border:2px solid #c9b988;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;}
+  .slotItem.empty{background:rgba(30,35,25,.45);border:2px solid rgba(90,90,70,.4);}
+  .slotItem .slotIcon{font-size:22px;}
+  .slotItem .slotCount{position:absolute;bottom:3px;right:5px;font-size:10px;font-weight:800;background:rgba(0,0,0,.45);color:#efe6cd;padding:0 4px;border-radius:5px;}
+  .equipSlots{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+  .equipSlot{width:86px;height:96px;background:rgba(0,0,0,.12);border:2px dashed #c9b988;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;text-align:center;}
+  .equipSlot.clickable{cursor:pointer;transition:transform .15s, background .15s;}
+  .equipSlot.clickable:hover{background:rgba(232,169,77,.28);transform:translateY(-2px);}
+  .equipSlot.dragover{background:rgba(143,201,58,.35);border-color:#8fc93a;transform:scale(1.05);}
+  .slotItem[draggable="true"]{cursor:grab;}
+  .equipSlot.filled{border-style:solid;background:rgba(232,169,77,.18);}
+  .equipSlot .esIconCanvas{width:48px;height:48px;}
+  .equipSlot .esLabel{font-size:9px;font-weight:800;color:#5a5138;}
+  .equipSlot .esVal{font-size:11px;font-weight:800;}
+  .resItem{background:rgba(255,255,255,.5);border:1px solid #c9b988;border-radius:9px;padding:6px 8px;font-size:12px;font-weight:800;display:flex;justify-content:space-between;opacity:.55;}
+  .resItem.hasStock{background:rgba(232,169,77,.28);border-color:#c9822c;opacity:1;}
+  .refineRow{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.5);border:1px solid #c9b988;border-radius:10px;padding:7px 9px;margin-bottom:7px;font-size:12px;}
+  .refineRow.refineReady{background:rgba(143,201,58,.18);border-color:#8fc93a;}
+  .slotCard{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.5);border:1px solid #c9b988;border-radius:12px;padding:11px;margin-bottom:9px;}
+  .slotCard.empty{opacity:.65;border-style:dashed;}
+  .slotCardInfo{flex:1;}
+  .slotCardName{font-weight:800;font-size:13.5px;}
+  .slotCardMeta{font-size:11px;color:#5a5138;margin-top:2px;}
+  .slotCardBtns{display:flex;gap:6px;}
+  .refineRow .rr-name{flex:1;font-weight:800;}
+  .colCard{background:rgba(255,255,255,.55);border:1px solid #c9b988;border-radius:10px;padding:8px 10px;margin-bottom:7px;cursor:pointer;}
+  .colCard.active{border-color:var(--ember);}
+  .colCard .ctop{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;}
+  .colCard .cname{font-weight:800;font-size:13px;}
+  .colCard .cback{font-size:10.5px;color:#5a5138;font-style:italic;margin-bottom:5px;}
+  .colCard select{font-family:'Nunito';font-weight:700;font-size:11px;border-radius:6px;border:1px solid #c9b988;padding:4px;}
+  .skillRow{display:flex;gap:8px;font-size:10.5px;font-weight:700;margin-bottom:4px;flex-wrap:wrap;}
+  .skillChip{background:rgba(0,0,0,.08);border-radius:6px;padding:2px 6px;}
+  .miniBar{height:6px;border-radius:4px;background:rgba(0,0,0,.15);overflow:hidden;margin-top:2px;}
+  .miniBarFill{height:100%;}
+  .buildSummary{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+  .buildChip{background:rgba(255,255,255,.5);border:1px solid #c9b988;border-radius:14px;padding:4px 10px;font-size:11px;font-weight:800;}
+  #eventLog{max-height:140px;overflow-y:auto;background:rgba(0,0,0,.06);border-radius:8px;padding:6px 8px;}
+  .logEntry{font-size:11.5px;padding:3px 0;border-bottom:1px dashed #c9b988;}
+  .logEntry:last-child{border-bottom:none;}
+
+  #encounter .panel{background:linear-gradient(180deg,#1c3a2b,#132a20);border-color:var(--amber);color:var(--parchment);}
+  /* Kampf im Vollbild: Panel füllt den Bildschirm, Szene oben, Steuerung unten */
+  #encounter{padding:0;}
+  #encounter .battlePanel{max-width:none;width:100%;height:100%;max-height:none;
+    border-radius:0;display:flex;flex-direction:column;gap:0;padding:10px 14px 12px;overflow:hidden;}
+  #encounter h2{margin:0 0 6px;font-size:17px;flex:0 0 auto;}
+  .battleSceneWrap{border-radius:10px;overflow:hidden;border:2px solid var(--pine);
+    margin:0 0 8px;flex:1 1 auto;min-height:0;display:flex;background:#0e2318;}
+  #battleSceneCanvas{display:block;width:100%;height:100%;object-fit:cover;}
+  #encounter #encLog{flex:0 0 auto;margin:0 0 8px;text-align:center;}
+  /* Untere Steuerzeile: Aktionen links, Party-Status rechts */
+  #encounter .battleBottomRow{flex:0 0 auto;display:flex;gap:14px;align-items:flex-start;
+    justify-content:space-between;margin:0;height:230px;overflow:hidden;}
+  /* Konstante Höhe für die Menüspalte: Haupt- und Untermenü belegen denselben Platz,
+     dadurch springt die Kampfszene beim Umschalten nicht mehr */
+  #encounter .battleMenuCol{flex:0 0 auto;min-width:0;min-height:210px;position:relative;}
+  #encounter .battleMenuCol .encActions{align-content:start;}
+  #encounter #encSubMenu{max-height:210px;overflow-y:auto;overflow-x:hidden;}
+  /* Statuskarten rechtsbündig ans Bildschirmende */
+  #encounter .partyStatusBar{flex:0 1 auto;align-self:flex-start;margin:0 0 0 auto;
+    display:flex;flex-wrap:wrap;gap:8px;align-content:start;justify-content:flex-end;}
+  /* Kompakte Statuskarte: feste, moderate Breite statt über die halbe Bildbreite */
+  #encounter .charBox{width:190px;flex:0 0 auto;padding:7px 10px 8px;}
+  #encounter .cbBarRow{gap:6px;margin-bottom:3px;}
+  #encounter .cbBarTrack{height:8px;border-radius:4px;}
+  #encounter .cbBarNum{font-size:9.5px;min-width:44px;text-align:right;}
+  /* Aktionsbuttons: Raster statt voller Breite */
+  #encounter .battleMenuCol .encActions{display:grid;grid-template-columns:repeat(2,minmax(120px,150px));
+    gap:8px;align-items:stretch;}
+  #encounter .battleMenuCol .encActions button{width:auto;text-align:center;padding:11px 12px;
+    font-size:13px;border-radius:9px;}
+  #encounter .battleMenuCol #encSubMenu{display:block;grid-template-columns:none;max-width:330px;}
+  #encounter .battleMenuCol #encSubMenu button{width:100%;text-align:left;}
+  .hpbar{height:8px;border-radius:5px;background:rgba(0,0,0,.4);margin-top:4px;overflow:hidden;border:1px solid rgba(0,0,0,.5);}
+  .hpfill{height:100%;background:linear-gradient(90deg,#3d8a3d,#8fc93a);transition:width .3s;}
+  .encActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  .itemQuickBar{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:8px;}
+  .partyStatusBar{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;margin:9px 0 2px;}
+  .partyStatusBar:empty{display:none;}
+  .battleBottomRow{display:flex;gap:10px;align-items:flex-start;margin-top:4px;}
+  .battleMenuCol{flex:1.1;min-width:0;}
+  .battleMenuCol .encActions{flex-direction:column;align-items:stretch;flex-wrap:nowrap;}
+  .battleMenuCol .encActions button{width:100%;text-align:left;}
+  .charBox{position:relative;background:linear-gradient(180deg,rgba(14,30,22,.92),rgba(8,18,14,.92));
+    border:1px solid rgba(255,255,255,.16);border-top:3px solid var(--moss-light);
+    border-radius:7px;padding:6px 9px 7px;min-width:0;box-shadow:0 3px 9px rgba(0,0,0,.4);}
+  .charBox.active{border-color:var(--ember);box-shadow:0 0 0 2px rgba(217,84,45,.45),0 3px 9px rgba(0,0,0,.5);}
+  .charBox.dead{opacity:.4;border-left-color:#b0392f;}
+  .charBox .cbName{font-size:11px;font-weight:800;color:var(--parchment);margin-bottom:3px;}
+  .cbBarRow{display:flex;align-items:center;gap:4px;margin-bottom:2px;}
+  .cbBarRow .cbLabel{font-size:8.5px;font-weight:800;width:14px;color:#b9c9b3;}
+  .cbBarTrack{flex:1;height:6px;border-radius:3px;background:rgba(0,0,0,.5);overflow:hidden;}
+  .cbBarFill{height:100%;}
+  .cbBarFill.hp{background:linear-gradient(90deg,#3d8a3d,#8fc93a);}
+  .cbBarFill.mp{background:linear-gradient(90deg,#3a6fa0,#7fc7f5);}
+  .cbBarNum{font-size:8.5px;font-weight:800;color:var(--parchment);min-width:34px;text-align:right;}
+  /* Makro-Weltkarte */
+  #macroOverlay{background:rgba(4,10,8,.95);z-index:55;padding:8px;}
+  .macroBox{width:100%;max-width:920px;display:flex;flex-direction:column;
+    background:#0e1a14;border:2px solid var(--panel-line);border-radius:12px;overflow:hidden;}
+  .macroTop{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:9px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
+  .macroTitle{font-size:14px;font-weight:800;color:var(--parchment);}
+  .macroHint{font-size:10.5px;color:#9aa89a;}
+  .macroCanvasWrap{overflow:auto;background:#0a1410;max-height:64vh;}
+  #macroCanvas{display:block;image-rendering:auto;margin:0 auto;}
+  .macroFooter{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:9px 14px;border-top:1px solid rgba(255,255,255,.1);}
+  #macroInfo{font-size:11.5px;font-weight:800;color:var(--amber);}
+  /* Overworld */
+  .owCanvas{display:block;width:100%;height:auto;border-radius:10px;border:2px solid var(--pine);
+    margin:8px 0 10px;background:#173840;}
+  .owList{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;max-height:34vh;overflow-y:auto;}
+  .owCard{display:flex;flex-direction:column;gap:3px;text-align:left;padding:9px 11px;border-radius:10px;
+    border:2px solid #c9b988;background:rgba(255,255,255,.42);cursor:pointer;font-family:inherit;
+    color:var(--ink);transition:border-color .12s,background .12s;}
+  .owCard:hover:not(:disabled){border-color:var(--amber);background:rgba(232,169,77,.24);}
+  .owCard.here{border-color:var(--ember);background:rgba(217,84,45,.16);cursor:default;}
+  .owCard.locked{background:rgba(120,120,110,.2);}
+  .owName{font-weight:800;font-size:13px;}
+  .owHere{color:var(--ember);font-size:11px;}
+  .owDesc{font-size:10.5px;line-height:1.4;opacity:.85;}
+  .owDanger{font-size:10px;font-weight:800;color:#a8462f;}
+  .owCost{font-size:10.5px;font-weight:800;margin-top:2px;}
+  .owOk{color:#3d7a35;}
+  .owMiss{color:#b03a2e;}
+  /* Story-Intro */
+  #introOverlay{background:rgba(4,10,8,.94);z-index:60;padding:0;}
+  .introBox{width:100%;max-width:920px;display:flex;flex-direction:column;gap:0;
+    background:#101c16;border:2px solid var(--panel-line);border-radius:14px;overflow:hidden;
+    box-shadow:0 12px 50px rgba(0,0,0,.7);}
+  #introCanvas{display:block;width:100%;height:auto;background:#0b1410;}
+  .introTextWrap{padding:16px 22px 10px;min-height:132px;}
+  .introChapter{font-size:11px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;
+    color:var(--amber);margin-bottom:8px;}
+  .introText{font-size:14px;line-height:1.65;color:var(--parchment);white-space:pre-wrap;
+    min-height:88px;}
+  .introFooter{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:10px 22px 16px;border-top:1px solid rgba(255,255,255,.09);}
+  .introDots{display:flex;gap:6px;}
+  .introDot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.22);transition:background .2s,transform .2s;}
+  .introDot.active{background:var(--amber);transform:scale(1.35);}
+  .introBtns{display:flex;gap:8px;}
+  #introNext{min-width:150px;}
+  @media(max-width:640px){
+    .introTextWrap{padding:12px 14px 8px;min-height:150px;}
+    .introText{font-size:13px;}
+    .introFooter{padding:8px 14px 12px;}
+  }
+  /* Werkzeuge */
+  .toolInv{background:rgba(0,0,0,.14);border-radius:9px;padding:7px 10px;margin-bottom:6px;}
+  .toolRow{display:flex;align-items:center;gap:8px;padding:3px 0;}
+  .tiIcon{font-size:15px;}
+  .tiName{flex:1 1 auto;font-size:11.5px;font-weight:800;color:var(--ink);}
+  .tiBar{flex:0 0 70px;height:6px;border-radius:3px;background:rgba(0,0,0,.2);overflow:hidden;}
+  .tiBar i{display:block;height:100%;border-radius:3px;}
+  .tiNum{flex:0 0 auto;font-size:10px;font-weight:800;min-width:78px;text-align:right;}
+  /* Produktionsrezepte */
+  .recipeCard{background:rgba(0,0,0,.16);border:1px solid rgba(0,0,0,.18);border-radius:9px;
+    padding:8px 11px;margin-bottom:7px;}
+  .rcHead{font-size:12px;font-weight:800;color:var(--ink);margin-bottom:3px;}
+  .rcFlow{display:flex;align-items:center;gap:8px;font-size:11px;flex-wrap:wrap;margin-bottom:4px;}
+  .rcIn{color:#7a6f4e;} .rcOut{color:#3d7a35;font-weight:800;}
+  .rcArrow{color:var(--amber);font-weight:800;}
+  .rcStock{font-size:10.5px;font-weight:800;margin-bottom:5px;display:flex;gap:8px;flex-wrap:wrap;}
+  .rcOk{color:#3d7a35;} .rcMiss{color:#b03a2e;}
+  /* Vorräte als Reiter */
+  .resTabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;}
+  .resTab{position:relative;font-size:11px;font-weight:800;padding:6px 11px;border-radius:8px;
+    border:1px solid rgba(0,0,0,.18);background:rgba(255,255,255,.4);color:#5a5138;
+    cursor:pointer;font-family:inherit;transition:background .12s,border-color .12s;}
+  .resTab:hover{background:rgba(232,169,77,.28);}
+  .resTab.active{background:linear-gradient(180deg,#e8a94d,#c9822c);border-color:#8a6f2c;color:#3a2c10;
+    box-shadow:0 2px 0 rgba(0,0,0,.15);}
+  .rtCount{display:inline-block;margin-left:6px;font-size:9.5px;background:rgba(0,0,0,.22);
+    border-radius:20px;padding:1px 6px;color:inherit;}
+  .resTab.active .rtCount{background:rgba(255,255,255,.4);}
+  .resTabBody{min-height:110px;}
+  /* Kompakte Kolonistenliste */
+  .colRow{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font-family:inherit;
+    padding:7px 10px;margin-bottom:4px;border-radius:9px;cursor:pointer;
+    border:1px solid rgba(0,0,0,.16);background:rgba(255,255,255,.42);color:var(--ink);
+    transition:background .12s,border-color .12s;}
+  .colRow:hover{background:rgba(232,169,77,.24);border-color:var(--amber);}
+  .colRow.active{border-color:var(--ember);box-shadow:0 0 0 2px rgba(217,84,45,.22);}
+  .colRow.expanded{border-bottom-left-radius:0;border-bottom-right-radius:0;margin-bottom:0;background:rgba(232,169,77,.2);}
+  .crIcon{font-size:16px;flex:0 0 auto;}
+  .crMain{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;line-height:1.25;}
+  .crName{font-size:12.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .crSub{font-size:10px;color:#7a6f4e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .crBars{flex:0 0 58px;display:flex;flex-direction:column;gap:3px;}
+  .crBar{display:block;height:5px;border-radius:3px;background:rgba(0,0,0,.18);overflow:hidden;}
+  .crBar i{display:block;height:100%;border-radius:3px;}
+  .crFlags{flex:0 0 auto;font-size:12px;letter-spacing:1px;}
+  .crParty{color:#b0392f;}
+  .crArrow{flex:0 0 auto;font-size:11px;color:#7a6f4e;}
+  .colDetail{border:1px solid var(--amber);border-top:none;border-radius:0 0 9px 9px;
+    padding:8px;margin-bottom:6px;background:rgba(255,255,255,.3);}
+  .colCardInner{background:none;border:none;padding:0;margin:0;}
+  /* Arbeitsübersicht (Tabellenansicht) */
+  .workHint{display:flex;justify-content:space-between;font-size:10px;font-weight:800;
+    text-transform:uppercase;letter-spacing:.5px;color:#7a6f4e;margin:8px 2px 4px;}
+  .workTableWrap{overflow:auto;max-height:52vh;border:1px solid rgba(0,0,0,.18);border-radius:9px;
+    background:rgba(255,255,255,.35);}
+  .workTable{border-collapse:separate;border-spacing:0;width:100%;font-family:inherit;}
+  .workTable th,.workTable td{padding:0;}
+  .wtNameCol{position:sticky;left:0;z-index:3;background:#e6dcc0;text-align:left;
+    font-size:10px;font-weight:800;color:#5a5138;padding:6px 8px !important;
+    text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid rgba(0,0,0,.15);}
+  .wtHead{background:#e6dcc0;position:sticky;top:0;z-index:2;padding:5px 2px !important;
+    border-bottom:2px solid rgba(0,0,0,.15);border-left:1px solid rgba(0,0,0,.07);min-width:52px;}
+  .wtIcon{display:block;font-size:13px;line-height:1.1;}
+  .wtLabel{display:block;font-size:8.5px;font-weight:800;color:#5a5138;letter-spacing:.2px;}
+  .wtName{position:sticky;left:0;z-index:1;background:#f2ead6;padding:5px 8px !important;
+    border-bottom:1px solid rgba(0,0,0,.08);cursor:pointer;white-space:nowrap;}
+  .wtName:hover{background:rgba(232,169,77,.3);}
+  .wtNameMain{display:block;font-size:12px;font-weight:800;color:var(--ink);line-height:1.2;}
+  .wtRole{display:block;font-size:9.5px;color:#7a6f4e;}
+  .wtCellWrap{border-bottom:1px solid rgba(0,0,0,.08);border-left:1px solid rgba(0,0,0,.07);
+    text-align:center;padding:2px !important;}
+  .wtCell{width:100%;min-width:44px;height:28px;border-radius:5px;cursor:pointer;
+    font-family:inherit;font-size:12.5px;font-weight:800;color:#3f3823;
+    border:1px solid rgba(0,0,0,.15);background:rgba(255,255,255,.5);transition:filter .1s;}
+  .wtCell:hover{filter:brightness(1.12);border-color:var(--amber);}
+  .wtCell[data-level="0"]{background:rgba(120,110,90,.18);color:#8a8270;}
+  .wtCell[data-level="1"]{background:rgba(143,201,58,.62);border-color:#5f8a28;}
+  .wtCell[data-level="2"]{background:rgba(232,169,77,.5);border-color:#b3822f;}
+  .wtCell[data-level="3"]{background:rgba(201,130,44,.24);}
+  .wtEmpty{padding:16px !important;text-align:center;font-size:12px;color:#7a6f4e;}
+  .workLegend{display:flex;flex-wrap:wrap;gap:10px;margin-top:9px;font-size:10.5px;color:#5a5138;}
+  .wlItem{background:rgba(0,0,0,.06);border-radius:6px;padding:3px 8px;}
+  /* Arbeitsprioritäten */
+  .prioWrap{margin-top:7px;}
+  .prioHead{font-size:9.5px;font-weight:800;color:#5a5138;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;}
+  .prioGrid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;}
+  .prioCell{display:flex;flex-direction:column;align-items:center;gap:1px;padding:3px 1px;
+    border-radius:6px;border:1px solid rgba(0,0,0,.18);background:rgba(255,255,255,.5);
+    cursor:pointer;font-family:inherit;line-height:1;}
+  .prioCell:hover{border-color:var(--amber);}
+  .pcIcon{font-size:11px;}
+  .pcVal{font-size:9.5px;font-weight:800;color:#4a4230;}
+  .prioCell[data-level="0"]{opacity:.4;}
+  .prioCell[data-level="1"]{background:rgba(143,201,58,.5);border-color:#6f9330;}
+  .prioCell[data-level="2"]{background:rgba(232,169,77,.4);}
+  .prioCell[data-level="3"]{background:rgba(255,255,255,.35);}
+  /* Gefährten am Zug */
+  .allyTurnHead{grid-column:1/-1;font-size:11.5px;padding:5px 8px;margin-bottom:3px;
+    background:rgba(232,169,77,.18);border-left:3px solid var(--amber);border-radius:6px;
+    color:var(--parchment);}
+  .allyTurnHead span{font-size:10px;opacity:.8;font-weight:600;}
+  /* Fortschrittsstufen im Baumenü */
+  .stageHeader{display:flex;align-items:baseline;gap:8px;margin:10px 0 5px;
+    padding-bottom:4px;border-bottom:2px solid rgba(0,0,0,.14);}
+  .stageHeader:first-child{margin-top:0;}
+  .shLabel{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#5a5138;}
+  .shHint{font-size:10px;color:#8a7f5e;font-style:italic;}
+  /* Einstiegsgebäude hervorheben */
+  .recipe.starter{border-left:4px solid var(--moss-light);background:rgba(143,201,58,.10);}
+  .recipe.starter .recipeIcon{filter:drop-shadow(0 0 4px rgba(143,201,58,.5));}
+  /* Frisuren als gezeichnete Kacheln */
+  .hairGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(50px,1fr));gap:4px;margin-bottom:5px;}
+  .hairTile{display:flex;flex-direction:column;align-items:center;gap:1px;padding:3px 2px;
+    border-radius:8px;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.45);
+    border:2px solid rgba(0,0,0,.14);transition:border-color .12s,background .12s,transform .1s;}
+  .hairTile:hover{background:rgba(232,169,77,.28);border-color:var(--amber);transform:translateY(-1px);}
+  .hairTile.active{border-color:var(--ember);background:rgba(217,84,45,.16);
+    box-shadow:0 0 0 2px rgba(217,84,45,.28);}
+  .hairTile canvas{display:block;width:38px;height:38px;}
+  .hairName{font-size:8.5px;font-weight:800;color:#5a5138;line-height:1;
+    max-width:46px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  /* --- Charaktereditor: Raster statt Pfeilzeilen --- */
+  .apGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));gap:5px;margin-bottom:6px;}
+  .apGrid.apGridCompact{grid-template-columns:repeat(auto-fit,minmax(66px,1fr));gap:4px;}
+  .apOpt{font-size:11px;font-weight:800;padding:7px 6px;border-radius:8px;cursor:pointer;
+    font-family:inherit;color:var(--ink);background:rgba(255,255,255,.5);
+    border:2px solid rgba(0,0,0,.15);transition:border-color .12s,background .12s,transform .1s;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .apOpt:hover{background:rgba(232,169,77,.28);border-color:var(--amber);}
+  .apOpt.active{background:linear-gradient(180deg,#e8a94d,#c9822c);border-color:var(--ember);
+    color:#3a2c10;box-shadow:0 2px 0 rgba(0,0,0,.18);}
+  .apSubLabel{font-size:9.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;
+    color:#7a6f4e;margin:4px 0 3px;}
+  /* Größere, klar markierte Farbfelder */
+  .apSwatchGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(34px,1fr));gap:6px;margin-bottom:4px;}
+  .apSwatchBig{height:34px;border-radius:9px;cursor:pointer;padding:0;
+    border:3px solid rgba(0,0,0,.2);transition:transform .1s,border-color .12s,box-shadow .12s;}
+  .apSwatchBig:hover{transform:scale(1.08);border-color:rgba(255,255,255,.7);}
+  .apSwatchBig.active{border-color:var(--ember);box-shadow:0 0 0 2px rgba(217,84,45,.35),inset 0 0 0 2px rgba(255,255,255,.5);}
+  /* Sektionen entzerren */
+  .apGroup{background:rgba(255,255,255,.22);border:1px solid rgba(0,0,0,.10);
+    border-radius:11px;padding:10px 12px;margin-bottom:9px;}
+  .apGroupLabel{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;
+    color:#5a5138;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid rgba(0,0,0,.10);}
+  /* Klassenkarten */
+  .classCards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;}
+  .classCard{display:flex;flex-direction:column;gap:3px;text-align:left;padding:11px 13px;
+    border-radius:11px;border:2px solid #c9b988;background:rgba(255,255,255,.42);
+    cursor:pointer;font-family:inherit;color:var(--ink);
+    transition:border-color .14s,background .14s,transform .1s,box-shadow .14s;}
+  .classCard:hover{border-color:var(--amber);background:rgba(232,169,77,.22);
+    transform:translateY(-2px);box-shadow:0 5px 12px rgba(0,0,0,.16);}
+  .classCard.active{border-color:var(--ember);background:rgba(217,84,45,.16);
+    box-shadow:0 0 0 2px rgba(217,84,45,.28);}
+  .ccIcon{font-size:22px;line-height:1;}
+  .ccName{font-weight:800;font-size:13.5px;}
+  .ccDesc{font-size:10.5px;line-height:1.35;opacity:.85;}
+  @media(max-width:560px){
+    .apGrid{grid-template-columns:repeat(auto-fit,minmax(72px,1fr));}
+    .classCards{grid-template-columns:1fr;}
+  }
+  /* --- Titelbildschirm --- */
+  #mainTitleScreen{background:#0a1410;z-index:70;padding:0;overflow:hidden;}
+  #titleBg{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .titleContent{position:relative;z-index:2;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;height:100%;gap:4px;padding:20px;text-align:center;}
+  .titleCrest{font-size:44px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.6));margin-bottom:2px;}
+  .gameTitle{font-size:clamp(38px,8vw,72px);font-weight:800;letter-spacing:5px;margin:0;
+    color:#f2e4c0;text-shadow:0 3px 0 #6b4a2b,0 6px 22px rgba(0,0,0,.75);line-height:1;}
+  .gameSubtitle{font-size:clamp(12px,2.2vw,17px);font-weight:800;letter-spacing:7px;
+    text-transform:uppercase;color:var(--amber);text-shadow:0 2px 8px rgba(0,0,0,.8);margin-bottom:22px;}
+  .titleBtns{display:flex;flex-direction:column;gap:9px;width:min(300px,80vw);}
+  .titleBtns button{width:100%;font-size:14px;padding:12px 16px;border-radius:11px;
+    box-shadow:0 4px 14px rgba(0,0,0,.45);}
+  .titleFoot{margin-top:22px;font-size:11px;font-style:italic;color:rgba(233,230,205,.55);
+    letter-spacing:1px;}
+  /* --- Reiter im Erstellungsmenü --- */
+  /* Rückweg im Startablauf: sitzt über den Schritten, damit er in jedem
+     Schritt an derselben Stelle steht. */
+  .startBack{align-self:flex-start;background:rgba(0,0,0,.16);color:var(--ink);
+    border:none;font-size:11px;font-weight:800;padding:6px 12px;border-radius:8px;
+    margin-bottom:9px;cursor:pointer;transition:background .12s;}
+  .startBack:hover{background:rgba(232,169,77,.28);}
+  .startBack.hidden{display:none;}
+  /* ---------- Ressourcenanzeige (oben links) ----------
+     Alle Ressourcen in zwei Spalten, damit die Liste breit statt hoch wird
+     und die linke Bildkante nicht bis zu den Statusbalken hinunter belegt.
+     Feste Spaltenspuren sorgen dafür, dass alle Zahlen auf derselben Kante
+     stehen — vorher bestimmte der längste Eintrag die Breite und kurze
+     Werte rutschten unter das Symbol des Nachbarn. */
+  #resourceOverlay{position:absolute;top:10px;left:10px;z-index:15;
+    display:grid;grid-template-columns:repeat(2, auto);
+    gap:3px 5px;align-content:start;
+    max-height:calc(100% - 210px);      /* lässt Platz für die Statusbalken */
+    overflow-y:auto;scrollbar-width:thin;
+    background:rgba(19,42,32,.80);border:1px solid var(--panel-line);
+    border-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,.45);
+    padding:6px;width:max-content;}
+  .invItem{display:grid;grid-template-columns:1.2em minmax(2.5ch,auto);
+    align-items:center;gap:4px;white-space:nowrap;
+    background:rgba(0,0,0,.22);padding:2px 6px;border-radius:6px;
+    border:1px solid rgba(255,255,255,.07);
+    transition:transform .15s, background .15s;}
+  #resourceOverlay .invItem{font-size:11.5px;font-weight:800;padding:2px 6px;}
+  .invItem > span{font-variant-numeric:tabular-nums;text-align:right;}
+
+  /* Wetterband hängt in der rechten Spalte und fließt unter dem
+     Weltkarten-Knopf ein, wenn Wetter auftritt. */
+  #weatherBanner{width:100%;box-sizing:border-box;text-align:center;}
+
+  /* ---------- Architekt-Leiste (unten) ---------- */
+  /* Linksbündig statt zentriert: die Leiste sitzt am linken Rand, wo auch
+     Ressourcenliste und Statusbalken stehen. Das padding-left der
+     Grundregel liefert den Abstand zum Rand, die erste Gruppe bekommt
+     deshalb kein zusätzliches Innenpolster. */
+  #bottomBar{justify-content:flex-start;padding-left:12px;}
+  #architekt{padding-left:0;}
+  #architekt{border-right:none;gap:6px;}
+  /* Sichtbarer Trenner zwischen Bau-Befehlen und Übersichtsfenstern. */
+  .barSpacer{display:inline-block;width:1px;height:26px;margin:0 10px;
+    background:rgba(255,255,255,.20);border-radius:1px;flex:none;}
+  .cmdWrap{position:relative;display:inline-flex;}
+  /* Klappt nach oben auf und liegt über der Karte, nicht in der Leiste —
+     dadurch springt nichts, wenn das Menü auf- und zugeht. */
+  .cmdMenu{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+    z-index:30;display:flex;flex-direction:column;gap:3px;min-width:172px;
+    background:rgba(14,28,20,.96);border:1px solid rgba(232,169,77,.32);
+    border-radius:10px;padding:6px;box-shadow:0 6px 20px rgba(0,0,0,.55);}
+  .cmdMenu.hidden{display:none;}
+  .cmdMenu button{display:flex;align-items:center;gap:9px;width:100%;
+    background:transparent;border:none;border-radius:7px;
+    padding:7px 10px;font:800 12.5px Nunito,sans-serif;color:var(--parchment);
+    cursor:pointer;text-align:left;transition:background .12s;}
+  .cmdMenu button:hover{background:rgba(232,169,77,.26);}
+  .cmdMenu button.active-designation{background:linear-gradient(180deg,#e8a94d,#c9822c);color:#3a2c10;}
+  .cmdMenu button span{font-size:15px;width:1.2em;text-align:center;}
+  .cmdMenu .cmdOff{margin-top:2px;border-top:1px solid rgba(255,255,255,.10);
+    padding-top:8px;opacity:.85;}
+  #btnDesignations.active-designation{background:linear-gradient(180deg,#e8a94d,#c9822c);
+    color:#3a2c10;border-color:#e8a94d;}
+
+  /* Werkzeug-Mauszeiger, solange ein Befehl aktiv ist */
+  #stage.cmd-chop    #game{cursor:crosshair;}
+  #stage.cmd-mine    #game{cursor:crosshair;}
+  #stage.cmd-harvest #game{cursor:crosshair;}
+  #cmdCursor{position:absolute;z-index:20;pointer-events:none;font-size:19px;
+    transform:translate(6px,-24px);filter:drop-shadow(0 1px 2px rgba(0,0,0,.8));}
+  #cmdCursor.hidden{display:none;}
+
+  .wizTabs{display:flex;gap:5px;margin-bottom:11px;border-bottom:2px solid rgba(0,0,0,.14);padding-bottom:8px;}
+  .wizTab{flex:1;font-size:11px;font-weight:800;padding:8px 6px;border-radius:9px 9px 0 0;
+    cursor:pointer;font-family:inherit;color:#7a6f4e;background:rgba(0,0,0,.07);
+    border:2px solid transparent;border-bottom:none;transition:background .12s,color .12s;}
+  .wizTab:hover{background:rgba(232,169,77,.2);color:var(--ink);}
+  .wizTab.active{background:linear-gradient(180deg,#e8a94d,#c9822c);color:#3a2c10;
+    border-color:#8a6f2c;box-shadow:0 -2px 0 rgba(0,0,0,.12) inset;}
+  .wizPane{min-height:0;}
+  .charPane.hidden{display:none;}
+  #startOverlay .panel{max-width:900px;height:min(92vh,720px);display:flex;flex-direction:column;overflow:hidden;}
+  #crewStep{display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden;}
+  #crewStep .wizPane{flex:1;min-height:0;overflow:hidden;}
+  /* Striktes Zwei-Spalten-Raster — kein vertikales Scrollen */
+  .editorGrid{display:grid;grid-template-columns:210px 1fr;gap:14px;height:100%;min-height:0;}
+  .edLeft{display:flex;flex-direction:column;gap:7px;min-height:0;}
+  #avatarStage{flex:0 0 auto;}
+  .edFieldLabel{font-size:9.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;
+    color:#7a6f4e;margin-top:2px;}
+  .edLeft input{width:100%;}
+  .edLeftBtns{display:flex;gap:6px;margin-top:auto;}
+  .edLeftBtns button{flex:1;font-size:10.5px;padding:7px 4px;}
+  .edRight{min-height:0;overflow-y:auto;padding-right:5px;}
+  .edRight .apEditor{display:block;}
+  .edRight .apControls{display:block;}
+  /* Kompaktere Gruppen, damit alles auf eine Seite passt */
+  .edRight .apGroup{padding:7px 9px;margin-bottom:6px;}
+  .edRight .apGroupLabel{font-size:9px;margin-bottom:4px;padding-bottom:3px;}
+  .edRight .apGrid{grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:4px;margin-bottom:4px;}
+  .edRight .apGrid.apGridCompact{grid-template-columns:repeat(auto-fit,minmax(56px,1fr));gap:3px;}
+  .edRight .apOpt{font-size:10px;padding:5px 4px;border-width:2px;}
+  .edRight .apSwatchGrid{grid-template-columns:repeat(auto-fit,minmax(26px,1fr));gap:5px;}
+  .edRight .apSwatchBig{height:26px;border-width:2px;}
+  .apPreviewWrap .apPreview{width:100%;height:auto;aspect-ratio:1;}
+  @media(max-width:700px){
+    .editorGrid{grid-template-columns:1fr;grid-template-rows:auto 1fr;}
+    .edLeft{flex-direction:row;flex-wrap:wrap;align-items:center;}
+    #avatarStage{flex:0 0 110px;}
+  }
+  @media(max-width:560px){ .wizTab{font-size:9.5px;padding:7px 3px;} }
+  .styleChoice{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px;}
+  .styleOpt{display:flex;flex-direction:column;gap:3px;text-align:left;padding:10px 12px;
+    border-radius:10px;border:2px solid #c9b988;background:rgba(255,255,255,.4);
+    cursor:pointer;font-family:inherit;color:var(--ink);transition:border-color .12s,background .12s;}
+  .styleOpt:hover{border-color:var(--amber);background:rgba(232,169,77,.22);
+    transform:translateY(-2px);box-shadow:0 5px 12px rgba(0,0,0,.16);}
+  .styleOpt{transition:border-color .14s,background .14s,transform .1s,box-shadow .14s;}
+  .styleOpt.active{border-color:var(--ember);background:rgba(217,84,45,.16);
+    box-shadow:0 0 0 2px rgba(217,84,45,.25);}
+  .soIcon{font-size:19px;}
+  .soTitle{font-weight:800;font-size:13px;}
+  .soDesc{font-size:11px;line-height:1.35;opacity:.85;}
+  @media(max-width:560px){ .styleChoice{grid-template-columns:1fr;} }
+  /* Optionen / Tastenbelegung */
+  .kbEditor{max-height:46vh;overflow-y:auto;padding-right:4px;margin-top:10px;}
+  .kbGroup{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;
+    color:var(--moss-light);margin:12px 0 5px;padding-bottom:3px;border-bottom:1px solid rgba(255,255,255,.14);}
+  .kbGroup:first-child{margin-top:0;}
+  .kbRow,.optRow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0;}
+  .kbLabel{font-size:12.5px;font-weight:700;color:var(--ink);}
+  .kbKeys{display:flex;gap:6px;flex:0 0 auto;}
+  .kbKey{font-size:11px;font-weight:800;min-width:78px;padding:6px 10px;border-radius:7px;
+    background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22);color:var(--parchment);
+    cursor:pointer;font-family:inherit;transition:background .12s,border-color .12s;}
+  .kbKey:hover{background:rgba(232,169,77,.22);border-color:var(--amber);}
+  .kbKey.listening{background:rgba(217,84,45,.35);border-color:var(--ember);color:#fff;}
+  .kbKey.empty{opacity:.55;}
+  .kbKey.active{background:linear-gradient(180deg,#3e8e6e,#2f6b53);border-color:#8fc93a;color:#eafff5;}
+  .optSection{background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.12);
+    border-radius:9px;padding:9px 12px;margin-top:8px;}
+  .skillDock{border:1px solid rgba(255,255,255,.2);border-radius:8px;overflow:hidden;background:rgba(0,0,0,.25);}
+  .skillRow2{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.08);border-left:4px solid transparent;cursor:pointer;background:none;color:var(--parchment);width:100%;text-align:left;font-family:inherit;}
+  .skillRow2:last-child{border-bottom:none;}
+  .skillRow2:hover:not(:disabled){background:rgba(232,169,77,.18);}
+  .skillRow2:disabled{opacity:.4;cursor:default;}
+  .skillRow2 .srName{font-weight:800;font-size:12.5px;}
+  .skillRow2 .srMp{font-weight:800;font-size:11px;background:rgba(60,110,180,.45);
+    border:1px solid rgba(140,190,255,.4);border-radius:5px;padding:2px 7px;color:#d8e8ff;
+    min-width:38px;text-align:center;letter-spacing:.3px;}
+  .skillRow2:disabled .srMp{background:rgba(120,60,60,.35);border-color:rgba(200,120,120,.35);color:#e8c0c0;}
+  .skillRow2 .srMp{font-size:11px;color:#7fc7f5;font-weight:800;}
+  /* Fester Infobereich: Höhe ist konstant, egal welcher Text drinsteht -> kein Layout-Shift */
+  .skillInfoBox{margin-top:8px;font-size:11.5px;line-height:1.35;color:#cfe0c9;
+    background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.14);
+    border-left:4px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 11px;
+    min-height:52px;max-height:52px;overflow:hidden;display:flex;align-items:center;
+    transition:border-left-color .15s;}
+  .itemQuickBtn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:var(--parchment);font-size:11px;font-weight:800;padding:5px 9px;border-radius:8px;cursor:pointer;}
+  .itemQuickBtn:disabled{opacity:.35;cursor:default;}
+  #encLog{font-size:12px;min-height:34px;text-align:center;color:#cfe0c9;margin-bottom:6px;}
+  .advClassRow .apRow button{font-size:10px;padding:4px 7px;}
+  .techItem{background:rgba(255,255,255,.5);border:1px solid #c9b988;border-radius:10px;padding:9px 10px;margin-bottom:7px;}
+  .techItem.locked{opacity:.55;}
+  .techItem.done{border-color:var(--moss-light);background:rgba(143,201,58,.18);}
+  .techTop{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:3px;}
+  .techName{font-weight:800;font-size:13px;}
+  .techDesc{font-size:11px;color:#5a5138;margin-bottom:6px;}
+  .techPrereq{font-size:10px;color:#8a6f2c;margin-bottom:6px;}
+
+  .kbd{display:inline-block;background:#20291f;color:var(--parchment);border-radius:5px;padding:1px 6px;font-size:11px;font-weight:800;margin:0 2px;}
+  .modeBtns{display:flex;gap:10px;margin:14px 0;}
+  .modeBtns button{flex:1;padding:14px 10px;font-size:13px;}
+  .crewGrid{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+  #colonyNameInput{width:100%;font-family:'Baloo 2';font-size:16px;padding:8px 10px;border-radius:9px;border:1px solid #c9b988;margin-bottom:10px;}
+  .apEditor{display:flex;gap:18px;align-items:flex-start;background:rgba(255,255,255,.5);border:1px solid #c9b988;border-radius:14px;padding:16px;margin-bottom:8px;}
+  .apPreviewWrap{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;}
+  .apPreview{width:170px;height:170px;background:radial-gradient(ellipse at center, rgba(232,169,77,.22) 0%, rgba(0,0,0,.06) 70%);border-radius:14px;border:2px solid #c9b988;box-shadow:inset 0 2px 8px rgba(0,0,0,.12);}
+  .apDice{font-size:11px;font-weight:800;padding:5px 12px;border-radius:8px;cursor:pointer;}
+  .apControls{flex:1;display:flex;flex-direction:column;gap:12px;min-width:0;}
+  .apGroup{display:flex;flex-direction:column;gap:6px;}
+  .apGroupLabel{font-size:10.5px;font-weight:800;color:#8a6f2c;text-transform:uppercase;letter-spacing:.03em;}
+  .apRow{display:flex;gap:6px;align-items:center;}
+  .apRow button{padding:5px 9px;font-size:11px;}
+  .apLabel{font-size:12px;font-weight:800;flex:1;text-align:center;background:rgba(0,0,0,.06);border-radius:8px;padding:5px 6px;}
+  .apSwatchRow{display:flex;gap:7px;flex-wrap:wrap;}
+  .apSwatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid rgba(0,0,0,.15);box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .12s;}
+  .apSwatch:hover{transform:scale(1.15);}
+  .apSwatch.active{border-color:var(--ember);box-shadow:0 0 0 2px var(--ember), 0 1px 3px rgba(0,0,0,.2);}
+</style>
+</head>
+<body>
+<div id="battleFlash"></div>
+<div id="sleepFade" style="position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity 0.8s ease;z-index:9999;"></div>
+<div id="app">
+  <div id="hud">
+    <div id="hudTop">
+      <div id="title">🏔️ <span id="colonyTitleText">Farholt</span> <span class="sub">Kolonie-Aufbau</span></div>
+      <div id="invRow">
+        <div class="invItem" id="dayNightIndicator" title="Tageszeit">☀️ <span id="dayNightLabel">Tag</span></div>
+      </div>
+      <button id="btnMainMenu" class="secondary" type="button">☰ Menü</button>
+      <button id="btnFullscreen" class="secondary" type="button">⛶ Vollbild</button>
+      <button id="btnGuide" class="secondary" type="button">❓ Guide</button>
+      <button id="btnSaveGame" class="secondary" type="button">💾 Speichern</button>
+      <button id="btnKeyToggle" class="secondary hidden" type="button">⌨️ WASD: Bewegen</button>
+      <button id="btnSoundToggle" class="secondary on" type="button">🔊 Sound: An</button>
+      <button id="btnMusicToggle" class="secondary on" type="button">🎵 Musik: An</button>
+    </div>
+  </div>
+
+  <div id="stage">
+    <canvas id="game" width="800" height="480"></canvas>
+    <div id="resourceOverlay">
+    <div class="invItem" title="Holz">🪵 <span id="invWood">0</span></div>
+    <div class="invItem" title="Kiefernholz">🌲 <span id="invHolzKiefer">0</span></div>
+    <div class="invItem" title="Dunkelholz">🪵 <span id="invHolzDunkel">0</span></div>
+    <div class="invItem" title="Bruchholz">🥢 <span id="invHolzBruch">0</span></div>
+    <div class="invItem" title="Stein">🪨 <span id="invStone">0</span></div>
+    <div class="invItem" title="Marmor">⬜ <span id="invSteinMarmor">0</span></div>
+    <div class="invItem" title="Sandstein">🟨 <span id="invSteinSand">0</span></div>
+    <div class="invItem" title="Titanerz">🔷 <span id="invErzTitan">0</span></div>
+    <div class="invItem" title="Nahrung (Beeren)">🫐 <span id="invBerry">0</span></div>
+    <div class="invItem" title="Fallen">🪤 <span id="invTrap">0</span></div>
+    <div class="invItem" title="Kolonisten">🏘️ <span id="invColonists">0</span></div>
+    </div>
+    <div id="cmdCursor" class="hidden"></div>
+    <div id="hint"></div>
+    <div id="minimapBox">
+      <canvas id="minimapCanvas" width="140" height="88"></canvas>
+      <div id="clockRow"><canvas id="clockDial" width="30" height="30"></canvas><span id="clockText">12:00</span></div>
+      <button id="btnWorldMapUnderMap" type="button">🗺️ Weltkarte</button>
+      <div id="weatherBanner"></div>
+    </div>
+    <div class="bars" id="bottomBars">
+      <div class="barWrap"><div class="barLabel"><span>❤ Leben</span><span id="lblHp">100</span></div><div class="barTrack"><div class="barFill fill-hp" id="barHp" style="width:100%"></div></div></div>
+      <div class="barWrap"><div class="barLabel"><span>🍖 Hunger</span><span id="lblHunger">100</span></div><div class="barTrack"><div class="barFill fill-hunger" id="barHunger" style="width:100%"></div></div></div>
+      <div class="barWrap"><div class="barLabel"><span>💧 Durst</span><span id="lblThirst">100</span></div><div class="barTrack"><div class="barFill fill-thirst" id="barThirst" style="width:100%"></div></div></div>
+      <div class="barWrap"><div class="barLabel"><span>⚡ Energie</span><span id="lblEnergy">100</span></div><div class="barTrack"><div class="barFill fill-energy" id="barEnergy" style="width:100%"></div></div></div>
+    </div>
+    
+    <div id="raidBanner"></div>
+    <div id="buildModeBanner"></div>
+    <div id="toastWrap"></div>
+
+    <div id="mainTitleScreen" class="overlay">
+      <canvas id="titleBg"></canvas>
+      <div class="titleContent">
+        <div class="titleCrest">🏔️</div>
+        <h1 class="gameTitle">Farholt</h1>
+        <div class="gameSubtitle">Kolonie-Aufbau</div>
+        <div class="titleBtns">
+          <button id="tbStart">▶️ Spiel starten</button>
+          <button id="tbContinue" class="secondary">💾 Fortsetzen</button>
+          <button id="tbOptions" class="secondary">⚙️ Einstellungen</button>
+          <button id="tbCredits" class="secondary">📜 Credits</button>
+        </div>
+        <div class="titleFoot">Ein Landstrich jenseits der Karten</div>
+      </div>
+    </div>
+    <div id="creditsOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:460px;">
+        <button class="panelClose secondary" id="closeCredits">Schließen</button>
+        <h2>📜 Credits</h2>
+        <div class="desc" style="line-height:1.8;">
+          <b>Farholt — Kolonie-Aufbau</b><br>
+          Ein Kolonie-Aufbauspiel mit Kreaturenzucht und Erkundung.<br><br>
+          <b>Grafik</b> — vollständig prozedural in HTML5 Canvas erzeugt.
+          Kein einziges Bild, jede Kreatur, jedes Gebäude und jede Landschaft
+          wird zur Laufzeit gezeichnet.<br><br>
+          <b>Klang</b> — Web Audio, synthetisiert ohne Audiodateien.<br><br>
+          <b>Umfang</b> — 108 Kreaturenformen, 60 Gebäude, 5 Kontinente.<br><br>
+          <span style="opacity:.7;">Entwickelt mit Claude.</span>
+        </div>
+      </div>
+    </div>
+    <div id="startOverlay" class="overlay hidden">
+      <div class="panel">
+        <button id="btnStartBack" class="startBack hidden">← Zurück</button>
+        <div id="titleStep">
+          <h2>🏔️ Wildwood Feldbuch</h2>
+          <div class="desc">Willkommen zurück in Farholt. Wie möchtest du starten?</div>
+          <div id="titleContinueList"></div>
+          <button id="btnTitleNewGame" style="width:100%;margin-top:6px;">🆕 Neuer Spielstand</button>
+        </div>
+        <div id="modeStep" class="hidden">
+          <h2>Gründe deine Kolonie</h2>
+          <div class="desc">Wähle deinen Start, bevor du in die Wildnis aufbrichst. Das Spiel wird komplett mit der Maus gesteuert.</div>
+          <div class="modeBtns">
+            <button id="btnSolo">🧍 Solo-Survival<br><span style="font-weight:600;font-size:10px;">Nur du, ganz allein</span></button>
+            <button id="btnMulti">👥 Mehrere Kolonisten<br><span style="font-weight:600;font-size:10px;">Starte mit 3 Gefährten</span></button>
+          </div>
+        </div>
+        <div id="crewStep" class="hidden">
+          <div class="wizTabs">
+            <button class="wizTab active" data-step="1">1 · Identität &amp; Aussehen</button>
+            <button class="wizTab" data-step="2">2 · Abenteuer-Klasse</button>
+            <button class="wizTab" data-step="3">3 · Steuerung</button>
+          </div>
+          <div class="wizPane" data-pane="1">
+            <div class="editorGrid">
+              <div class="edLeft">
+                <div id="avatarStage"></div>
+                <label class="edFieldLabel">Name deiner Kolonie</label>
+                <input id="colonyNameInput" type="text" maxlength="24">
+                <div class="edLeftBtns">
+                  <button type="button" class="secondary" id="edDice">🎲 Zufall</button>
+                  <button type="button" class="secondary" id="edReroll">🔄 Neu würfeln</button>
+                </div>
+              </div>
+              <div class="edRight" id="playerAppearanceEditor"></div>
+            </div>
+          </div>
+          <div class="wizPane hidden" data-pane="2">
+            <div class="desc">Bestimmt, wie du in Kämpfen kämpfst — auch ganz allein, ohne Gefährten.</div>
+            <div id="playerClassEditor"></div>
+            <div class="desc" id="crewDesc" style="margin-top:10px;"></div>
+            <div class="crewGrid" id="crewGrid"></div>
+          </div>
+          <div class="wizPane hidden" data-pane="3">
+          <h3 style="margin:0 0 4px;">Wie möchtest du spielen?</h3>
+          <div class="desc" style="margin-bottom:8px;">Lässt sich später jederzeit unter ⚙️ Optionen ändern.</div>
+          <div class="styleChoice" id="startStyleChoice">
+            <button type="button" class="styleOpt" id="startStyleMouse">
+              <span class="soIcon">🖱️</span>
+              <span class="soTitle">Maus &amp; Tastatur</span>
+              <span class="soDesc">Tastatur bewegt deine Figur direkt. Klicken funktioniert weiterhin für alles andere.</span>
+            </button>
+            <button type="button" class="styleOpt" id="startStyleClick">
+              <span class="soIcon">🎯</span>
+              <span class="soTitle">Klick-Steuerung</span>
+              <span class="soDesc">Die Figur folgt deinen Mausklicks, die Tastatur bewegt stattdessen die Kamera.</span>
+            </button>
+          </div>
+          <p style="font-size:12.5px;line-height:1.6;">
+            🖱️ <b>Klicken</b> zum Gehen/Ernten/Angreifen &nbsp; 🖱️ <b>Ziehen</b> beim Bauen von Mauern/Zonen &nbsp; 🖱️ <b>Klick auf Kolonisten</b> für Befehle<br>
+            ⌨️ <b>WASD/Pfeiltasten</b> zum Bewegen &nbsp; <b>Leertaste/E</b> zum Ernten/Bauen/Trinken &nbsp; <b>C</b> Bauen · <b>I</b> Feldbuch · <b>K</b> Kolonie · <b>Z</b> Ausruhen
+          </p>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button id="btnReroll" class="secondary">🔄 Neu würfeln</button>
+            <button id="btnConfirmCrew" style="flex:1;">▶️ Los geht's</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="craftOverlay" class="overlay hidden">
+      <div class="panel">
+        <button class="panelClose secondary" id="closeCraft">Schließen</button>
+        <h2>🔨 Bauen &amp; Herstellen</h2>
+        <div class="desc">Wähle ein Gebäude — danach im Feld klicken oder ziehen (Mauern/Zonen), um zu platzieren.</div>
+        <div class="mmTabs" id="craftTabs"></div>
+        <div id="recipeList"></div>
+      </div>
+    </div>
+
+    <div id="characterOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:760px;">
+        <button class="panelClose secondary" id="closeCharacter">Schließen</button>
+        <h2>🧍 Charakter</h2>
+        <!-- Reiter: bisher lag alles in einer langen Liste, das Inventar ganz
+             unten. Taste U sprang dorthin nicht, sondern öffnete dieselbe
+             Ansicht wie P. -->
+        <div class="wizTabs" id="charTabs">
+          <button class="wizTab active" data-chartab="charakter">🧍 Charakter</button>
+          <button class="wizTab" data-chartab="inventar">🎒 Inventar</button>
+          <button class="wizTab" data-chartab="faehigkeiten">📜 Fähigkeiten</button>
+        </div>
+
+        <div class="charPane" data-charpane="charakter">
+          <div id="charClassInfo"></div>
+          <div id="charClassEditor" style="margin-bottom:12px;"></div>
+          <h3 style="margin-top:14px;">⚔️ Ausrüstungsplätze</h3>
+          <div class="equipSlots" id="charEquipSlots"></div>
+          <div id="charAttrList"></div>
+        </div>
+
+        <div class="charPane hidden" data-charpane="inventar">
+          <h3 style="margin-top:4px;">🎒 Inventar</h3>
+          <div class="desc">Ziehe ein Material auf ein Ausrüstungsfeld im Reiter „Charakter", um passende Ausrüstung zu schmieden.</div>
+          <div class="slotGrid" id="invSlotGrid"></div>
+          <h3 style="margin-top:14px;">🍽️ Essen &amp; Trinken</h3>
+          <div id="invFoodList"></div>
+        </div>
+
+        <div class="charPane hidden" data-charpane="faehigkeiten">
+          <h3 style="margin-top:4px;">📜 Fähigkeiten</h3>
+          <div id="charAbilityList"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="journalOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:560px;">
+        <button class="panelClose secondary" id="closeJournal">Schließen</button>
+        <h2>📓 Tagebuch</h2>
+        <div class="desc">Deine jüngsten Erlebnisse in Farholt.</div>
+        <div id="journalList"></div>
+      </div>
+    </div>
+
+    <div id="goalsOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:520px;">
+        <button class="panelClose secondary" id="closeGoals">Schließen</button>
+        <h2>📖 Quests</h2>
+        <div class="desc" id="goalsDesc"></div>
+        <div id="goalsList"></div>
+      </div>
+    </div>
+
+    <div id="slotsOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:520px;">
+        <button class="panelClose secondary" id="closeSlots">Schließen</button>
+        <h2 id="slotsTitle">💾 Speicherplätze</h2>
+        <div class="desc" id="slotsDesc">Wähle einen der 3 Speicherplätze.</div>
+        <div id="slotsList"></div>
+      </div>
+    </div>
+
+    <div id="dexOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:640px;">
+        <button class="panelClose secondary" id="closeDex">Schließen</button>
+        <h2>📖 Feldbuch</h2>
+        <h3>🐾 Dein Team</h3>
+        <div class="desc">Wähle, welche Kreatur dich in den nächsten Kampf begleitet.</div>
+        <div id="dexTeamList" style="margin-bottom:14px;"></div>
+        <h3>Alle Kreaturen</h3>
+        <div class="dexGrid" id="dexGrid"></div>
+      </div>
+    </div>
+
+    <div id="macroOverlay" class="overlay hidden">
+      <div class="macroBox">
+        <div class="macroTop">
+          <span class="macroTitle">🗺️ <b id="macroContName">Farholm</b></span>
+          <span class="macroHint">WASD / Pfeile · Leertaste betreten · Esc zurück</span>
+        </div>
+        <div class="macroCanvasWrap"><canvas id="macroCanvas"></canvas></div>
+        <div class="macroFooter">
+          <span id="macroInfo"></span>
+          <button class="secondary" id="macroBack">↩ Zurück zur Detailansicht</button>
+        </div>
+      </div>
+    </div>
+    <div id="overworldOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:820px;">
+        <button class="panelClose secondary" id="closeOverworld">Schließen</button>
+        <h2>🌍 Overworld</h2>
+        <div class="desc">Die bekannten Landmassen. Von Farholm aus führen Seewege zu den übrigen Küsten — jede Überfahrt kostet Ausrüstung.</div>
+        <canvas id="overworldCanvas" width="780" height="330" class="owCanvas"></canvas>
+        <div class="owList" id="overworldList"></div>
+      </div>
+    </div>
+    <div id="introOverlay" class="overlay hidden">
+      <div class="introBox">
+        <canvas id="introCanvas" width="880" height="330"></canvas>
+        <div class="introTextWrap">
+          <div class="introChapter" id="introChapter"></div>
+          <div class="introText" id="introText"></div>
+        </div>
+        <div class="introFooter">
+          <div class="introDots" id="introDots"></div>
+          <div class="introBtns">
+            <button class="secondary" id="introSkip">Überspringen</button>
+            <button id="introNext">Weiter ▶</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="workOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:760px;">
+        <button class="panelClose secondary" id="closeWork">Schließen</button>
+        <h2>🧑‍🌾 Arbeitsübersicht</h2>
+        <div class="desc">Klicke auf ein Feld, um die Priorität zu ändern. <b>1</b> = zuerst, <b>3</b> = zuletzt, <b>–</b> = aus.</div>
+        <div class="workHint"><span>⬅ höhere Priorität</span><span>niedrigere Priorität ➡</span></div>
+        <div class="workTableWrap"><table class="workTable" id="workTable"></table></div>
+        <div class="workLegend" id="workLegend"></div>
+      </div>
+    </div>
+    <div id="optionsOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:520px;">
+        <button class="panelClose secondary" id="closeOptions">Schließen</button>
+        <h2>⚙️ Optionen</h2>
+        <div class="desc">Steuerung anpassen. Klicke auf ein Feld und drücke die gewünschte Taste (Esc bricht ab).</div>
+        <div class="optSection">
+          <div class="optRow">
+            <span class="kbLabel">Spielstil</span>
+            <div class="kbKeys">
+              <button type="button" class="kbKey" id="optStyleMouse">🖱️ Maus</button>
+              <button type="button" class="kbKey" id="optStyleKeys">⌨️ Tastatur</button>
+            </div>
+          </div>
+          <div class="desc" id="optStyleDesc" style="margin-top:2px;"></div>
+        </div>
+        <div class="optSection">
+          <div class="optRow">
+            <span class="kbLabel">Möbel ausrichten</span>
+            <div class="kbKeys">
+              <button type="button" class="kbKey" id="optAlignFurniture" style="min-width:110px;">🪑 Alle geraderücken</button>
+            </div>
+          </div>
+          <div class="desc" style="margin-top:2px;">Setzt die Ausrichtung aller Möbel zurück.</div>
+        </div>
+        <div class="optSection">
+          <div class="optRow">
+            <span class="kbLabel">Story-Intro</span>
+            <div class="kbKeys">
+              <button type="button" class="kbKey" id="optReplayIntro" style="min-width:110px;">▶ Erneut ansehen</button>
+            </div>
+          </div>
+          <div class="desc" style="margin-top:2px;">Die Ankunft an der Küste von Farholt noch einmal erleben.</div>
+        </div>
+        <div id="keybindEditor" class="kbEditor"></div>
+      </div>
+    </div>
+    <div id="mainMenuOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:420px;">
+        <button class="panelClose secondary" id="closeMainMenu">Schließen</button>
+        <h2>⏸️ Pause</h2>
+        <!-- Pausenbereich über dem Schnellzugriff. Das Spiel steht ohnehin
+             still, solange ein Fenster offen ist — bisher sagte das nur
+             niemand, und ein Weg zurück zum Titel fehlte ganz. -->
+        <div id="pauseState" class="pauseState">⏸️ Das Spiel ist angehalten</div>
+        <div class="pauseMain">
+          <button id="pauseResume">▶️ Fortsetzen</button>
+          <button id="pauseOptions" class="secondary">⚙️ Einstellungen</button>
+          <button id="pauseSaveQuit" class="secondary">🏔️ Speichern &amp; zum Titel</button>
+        </div>
+        <div class="desc" style="margin-top:10px;">Schnellzugriff auf alle Fenster.</div>
+        <div class="launcherGrid">
+          <button id="launchSave">💾 Speichern</button>
+          <button id="launchLoad">📂 Laden</button>
+          <button id="launchCharacter">🧍 Charakter</button>
+          <button id="launchDex">📖 Feldbuch</button>
+          <button id="launchJournal">📓 Tagebuch</button>
+          <button id="launchChronik">📜 Chronik</button>
+          <button id="launchGoals">📖 Quests</button>
+          <button id="launchWorldMap">🗺️ Weltkarte</button>
+          <button id="launchColony">🏘️ Kolonie</button>
+          <button id="launchCraft">🔨 Bauen</button>
+          <button id="launchResearch">🔬 Forschung</button>
+          <button id="launchMacro">🗺️ Weltkarte (Reise)</button>
+          <button id="launchOverworld">🌍 Overworld</button>
+          <button id="launchWork">🧑‍🌾 Arbeit</button>
+          <button id="launchOptions">⚙️ Optionen</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="worldMapOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:480px;">
+        <button class="panelClose secondary" id="closeWorldMap">Schließen</button>
+        <h2>🗺️ Weltkarte</h2>
+        <div class="desc">Klicke eine bereits besuchte Region an, um dorthin zu reisen. Unbekannte Regionen musst du erst zu Fuß über die Kartenränder entdecken.</div>
+        <div class="wmGrid" id="worldMapGrid"></div>
+      </div>
+    </div>
+
+    <div id="researchOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:520px;">
+        <button class="panelClose secondary" id="closeResearch">Schließen</button>
+        <h2>🔬 Forschung</h2>
+        <div class="desc">Dein Forschungstisch erzeugt passiv Forschungspunkte. Manche Technologien setzen andere voraus.</div>
+        <div class="resItem" style="margin-bottom:10px;font-size:14px;"><span>🔬 Forschungspunkte</span><span id="researchPoints">0</span></div>
+        <div id="techList"></div>
+      </div>
+    </div>
+
+    <div id="villageShopOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:480px;">
+        <button class="panelClose secondary" id="closeVillageShop">Verlassen</button>
+        <h2>🏪 Wandernder Händler</h2>
+        <div class="desc">"Willkommen, Reisende! Tauschst du etwas mit mir?"</div>
+        <div id="villageTradeList"></div>
+      </div>
+    </div>
+
+    <div id="chronikOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:520px;">
+        <button class="panelClose secondary" id="closeChronik">Schließen</button>
+        <h2>📜 Chronik</h2>
+        <div class="desc">Fundstücke, Erinnerungen und Gerüchte, die du auf deinen Wegen entdeckt hast.</div>
+        <div id="chronikList"></div>
+      </div>
+    </div>
+
+    <div id="interiorOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:460px;">
+        <button class="panelClose secondary" id="closeInterior">Verlassen</button>
+        <h2 id="interiorTitle">Gebäude</h2>
+        <div class="interiorCanvasWrap"><canvas id="interiorCanvas" width="360" height="180"></canvas></div>
+        <div id="interiorBody"></div>
+      </div>
+    </div>
+
+    <div id="storyOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:440px;">
+        <h2 id="storyTitle">Ereignis</h2>
+        <div class="desc" id="storyDesc"></div>
+        <div id="storyChoices" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+
+    <div id="colonyOverlay" class="overlay hidden">
+      <div class="panel" style="max-width:640px;">
+        <button class="panelClose secondary" id="closeColony">Schließen</button>
+        <h2>🏘️ Kolonie</h2>
+        <div class="desc">Vorräte nach Kategorien, deine Kolonisten und das Neueste aus der Siedlung. Klick auf einen Namen öffnet die Details und wählt ihn im Spielfeld aus.</div>
+
+        <h3>Vorräte</h3>
+        <div class="resGridWrap" id="resGrid"></div>
+
+        <h3>Kolonisten (<span id="colCount">0</span>) — Party: <span id="partyCount">0</span>/<span id="partyMaxLabel">3</span></h3>
+        <div class="desc">Jeder Kolonist bekommt einmalig eine feste Klasse — bis auf Schriftrollen-Zufälle ist die danach unveränderlich. Zusammen mit dir kämpfen bis zu 4 (mit Forschung mehr).</div>
+        <div id="colonistList"></div>
+        <div class="desc" id="colonistHint"></div>
+
+        <h3>Gebäude</h3>
+        <div class="buildSummary" id="buildSummary"></div>
+
+        <h3>Ereignisse</h3>
+        <div id="eventLog"></div>
+      </div>
+    </div>
+
+    <div id="encounter" class="overlay hidden">
+      <div class="panel battlePanel">
+        <h2 id="encTitle">Wilde Begegnung!</h2>
+        <div class="battleSceneWrap"><canvas id="battleSceneCanvas" width="1280" height="500"></canvas></div>
+        <div id="encLog">Ein wildes Wesen erscheint!</div>
+        <div class="battleBottomRow">
+          <div class="battleMenuCol">
+            <div class="encActions" id="encMainMenu">
+              <button id="btnMenuFight">⚔ Kampf</button>
+              <button id="btnMenuPartyRound" class="hidden">⚔ Party-Runde</button>
+              <button id="btnMenuItem">🎒 Item</button>
+              <button id="btnMenuDefend" class="secondary">🛡 Verteidigen</button>
+              <button id="btnMenuFlee" class="secondary">🏃 Fliehen</button>
+              <button id="btnAutoBattle" class="secondary" title="Kolonisten kämpfen selbstständig weiter">🤖 Autokampf: Aus</button>
+            </div>
+            <div class="encActions hidden" id="encSubMenu"></div>
+          </div>
+          <div class="partyStatusBar" id="partyStatusBar"></div>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="gameOverOverlay" class="overlay hidden">
+      <div class="panel" style="text-align:center;">
+        <h2>Du bist zusammengebrochen…</h2>
+        <div class="desc">Ein Kolonist findet dich und bringt dich zurück zum Lager.</div>
+        <button id="btnRespawn">Weitermachen</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="commandBar">
+    <span class="cbName" id="cbName">–</span>
+    <button class="roleBtn" id="cbWork" title="Arbeitsübersicht öffnen">🧑‍🌾</button>
+    <button id="cbGoto" class="secondary">📍 Ziel wählen</button>
+    <button id="cbDeselect" class="secondary">✕ Abwählen</button>
+  </div>
+
+  <div id="bottomBar">
+    <!-- Architekt-Leiste: mittig am unteren Rand, Befehle statt Fenster.
+         Das Aufträge-Menü klappt nach oben auf, damit es die Leiste nicht
+         verschiebt und der Blick auf der Karte bleibt. -->
+    <!-- Reihenfolge: Bauwerkzeuge links, dann sichtbarer Abstand, dann die
+         Übersichtsfenster. Der Trenner macht klar, dass links Befehle für
+         die Karte stehen und rechts Fenster geöffnet werden. -->
+    <div class="barGroup" id="architekt">
+      <button id="btnCraft">🔨 Bauen</button>
+      <button id="btnDemolish" class="secondary">⛏️ Abreißen</button>
+
+      <div class="cmdWrap">
+        <button id="btnDesignations" class="secondary" aria-expanded="false">📋 Aufträge ▴</button>
+        <div id="desMenu" class="cmdMenu hidden" role="menu">
+          <button data-designation="chop"    role="menuitem"><span>🪓</span> Holz fällen</button>
+          <button data-designation="mine"    role="menuitem"><span>⛏️</span> Bergbau</button>
+          <button data-designation="harvest" role="menuitem"><span>🌿</span> Ernten</button>
+          <button data-designation=""        role="menuitem" class="cmdOff"><span>✕</span> Befehl beenden</button>
+        </div>
+      </div>
+
+      <span class="barSpacer" aria-hidden="true"></span>
+
+      <button id="btnColony">🏘️ Kolonie</button>
+      <button id="btnResearch" class="secondary">🔬 Forschung</button>
+    </div>
+    <div style="display:none;">
+      <button id="btnWorldMap">🗺️ Weltkarte</button>
+      <button id="btnRest">🔥 Ausruhen</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./main.js"></script>
+
+</body>
+</html>
